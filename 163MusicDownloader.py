@@ -46,7 +46,7 @@ def searchMusicByIdAndProvider(mid,provider):
     if(ptype == None):
         ptype="netease"
     postData = { 
-        "input": mid,
+        "input": str(mid),
         "filter": "id",
         "type": ptype,
         "page": 1,
@@ -66,26 +66,69 @@ def searchMusicByIdAndProvider(mid,provider):
         r_file.close()
     return responseRes.text
 
-def downloadMusic(filename,url):
-    _filename=filename.replace(",","+").replace(" ","")
-    c = "powershell -Command \"Invoke-WebRequest %s -OutFile %s\"" % (url,download_path+_filename)
-    print(c)
-    os.system(c)
+def downloadMusic(filename,url,path):
+    _path=path
+    if(path==None):
+        _path=download_path
+    _filename=filename.replace(",","+").replace("'","").replace("’","").replace("!","+").replace("@","+").replace("#","+").replace("$","+").replace("%","+").replace("^","+").replace("&","+").replace("*","+").replace(":","").replace("：","").replace(" "," ").replace('\n','').replace(' ','').replace(':','').replace('：','')
+    c = "powershell -Command \"Invoke-WebRequest %s -OutFile %s\"" % (url,_path+_filename.encode('GBK').decode("GBK"))
+    try:
+        if(url==None):
+            return
+        print(c)
+        os.system(c)
+        return
+    except Exception as e:
+        print(e)
+        return
 
-def downloadMusicFrom163ById(mid):
-    data=searchMusicByIdAndProvider(mid,"netease")
+
+def downloadMusicFrom163ById(mid,path):
+    return downloadMusicByIdAndProvider(mid,path,"netease")
+
+def downloadMusicByIdAndProvider(mid,path,provider):
+    data=searchMusicByIdAndProvider(str(mid),provider)
     data=json.loads(data)
     filename=data['data'][0]['author']+"-"+data['data'][0]['title']+".mp3"
-    filename=filename.replace(",","+")
     url=data['data'][0]['url']
-    downloadMusic(filename,url)
+    downloadMusic(filename,url,path)
+    return data
 
+def getPlayList(url):
+    print("open:"+url)
+    mList=[]
+    responseRes = webSession.get(url,  headers = defaultHeader)
+    # print(f"statusCode = {responseRes.status_code}")
+    # print(f"text = {responseRes.text}")
+    webSession.cookies.save()
+    data=responseRes.text
+    datas=data.split("<li><a href=\"/song?id=")
+    # print(len(datas))
+    for i in range(1,len(datas)):
+        value=datas[i].split("\"")[0]
+        mList.append(value)
+        print(value)
+        pass
+    return mList
+
+def downloadPlayList(url,path):
+    _path=download_path
+    if(path==None):
+        print("path None")
+    else:
+        _path=path
+    plist=getPlayList(url)
+    for song in plist:
+        downloadMusicFrom163ById(song,_path)
+        pass
 if __name__ == "__main__":
     # webSession.cookies.load()
     # print(webSession.cookies)
-    mid=input()
-    mid=mid.upper()
-    downloadMusicFrom163ById(mid)
+    # mid=input()
+    # mid=mid.upper()
+    downloadPlayList("https://music.163.com/playlist?id=140988826&userid=114431055",download_path)
+    # https://music.163.com/playlist?id=140988826&userid=114431055
+    # downloadMusicFrom163ById(mid)
     
 data_file.close()
 if data_file:
