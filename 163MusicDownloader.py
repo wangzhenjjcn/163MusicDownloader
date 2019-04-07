@@ -8,7 +8,7 @@ import json
 # import base64
 # from PIL import Image
 # from random import random
-data_file=open("./tmp/data.csv","a",encoding='utf-8')
+# data_file=open("./tmp/data.csv","a",encoding='utf-8')
 songList={}
 try:
     import cookielib
@@ -16,9 +16,13 @@ try:
 except:
     import http.cookiejar as cookielib
     print(f"python3.")
+
+
 webSession = requests.session()
 webSession.cookies = cookielib.LWPCookieJar(filename = "cookie.txt")
 download_path="./download/"
+provider="netease"
+ptname="网易云音乐"
 defaulturl = "http://music.sonimei.cn/"
 
 defaultHeader = {
@@ -30,9 +34,7 @@ defaultHeader = {
         'accept-language': "zh-CN,zh;q=0.9,en;q=0.8,zh-TW;q=0.7,ja;q=0.6",
         'cache-control': "no-cache"
         }
-
-def searchMusicByIdAndProvider(mid,provider):
-    headers = {
+ajaxheaders = {
         'upgrade-insecure-requests': "1",
         'user-agent': "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/71.0.3578.98 Safari/537.36",
         'dnt': "1",
@@ -42,94 +44,348 @@ def searchMusicByIdAndProvider(mid,provider):
         'cache-control': "no-cache",
         'accept': "application/json, text/javascript, */*; q=0.01",
     }
-    ptype=provider
-    if(ptype == None):
-        ptype="netease"
+def searchMusicById(mid):
     postData = { 
         "input": str(mid),
         "filter": "id",
-        "type": ptype,
+        "type": provider,
         "page": 1,
         }
-    responseRes = webSession.post(defaulturl, data = postData, headers = headers,verify=False )
-    webSession.cookies.save()
-    print(f"statusCode = {responseRes.status_code}"+":"+defaulturl)
+    responseRes = webSession.post(defaulturl, data = postData, headers = ajaxheaders,verify=False )
+    data=json.loads(responseRes.text)
+    # print(f"statusCode = {responseRes.status_code}"+":"+defaulturl)
+     
+    if responseRes.status_code!=200 :
+        return []
     #print(f"text = {responseRes.text.encode('utf-8').decode('unicode_escape')}")
-    r_file=open("./tmp/"+str(mid)+"-"+str(ptype),"w",encoding="utf-8")
     try:
-        data=json.loads(responseRes.text)
+        r_file=open("./tmp/"+str(data['data'][0]['songid'])+"-"+str(data['data'][0]['type']),"w",encoding="utf-8")
         r_file.write(str(data))
         r_file.flush()
+        return data['data']
     except:
         responseRes.text
+        return data['data']
     finally:
         r_file.close()
-    return responseRes.text
+        return data['data']
 
-def downloadMusic(filename,url,path):
-    _path=path
-    if(path==None):
-        _path=download_path
-    _filename=filename.replace(",","+").replace("'","").replace("’","").replace("!","+").replace("@","+").replace("#","+").replace("$","+").replace("%","+").replace("^","+").replace("&","+").replace("*","+").replace(":","").replace("：","").replace(" "," ").replace('\n','').replace(' ','').replace(':','').replace('：','')
-    c = "powershell -Command \"Invoke-WebRequest %s -OutFile %s\"" % (url,_path+_filename.encode('GBK').decode("GBK"))
+def searchMusicByTitle(title,page):
+    postData = { 
+        "input": str(title),
+        "filter": "name",
+        "type": provider,
+        "page": page,
+    }
+    responseRes = webSession.post(defaulturl, data = postData, headers = ajaxheaders,verify=False )
+    data=json.loads(responseRes.text)
+    # print(f"statusCode = {responseRes.status_code}"+":"+defaulturl)
+    # print(f"text = {responseRes.text.encode('utf-8').decode('unicode_escape')}")
+    
+    if responseRes.status_code!=200 :
+        return []
     try:
+        r_file=open("./tmp/"+str(title)+"-"+str(page)+"-"+str(provider),"w",encoding="utf-8")
+        r_file.write(str(data))
+        r_file.flush()
+        return data['data']
+    except:
+        return data['data']
+    finally:
+        r_file.close()
+        return data['data']
+     
+def searchMusicListByKeyWord(word):
+    print("当前平台："+str(ptname)+"-"+str(provider)+"关键字："+str(word))
+    datas=[]
+    page=1
+    data=searchMusicByTitle(word,page)
+    while(len(data)>0 ):
+        for song in data:
+            espace=""
+            for n in range(1,60-len(song['author'])):
+                espace+=" "
+            print(song['author']+espace+song['title'])
+        datas.extend(data)
+        print("pages:"+str(page)+"  datas:"+str(len(datas)))
+        page+=1
+        data=searchMusicByTitle(word,page)
+    print("当前平台："+str(ptname)+"-"+str(provider)+"关键字："+str(word)+"一共检测到："+str(len(datas))+"条")
+    return datas
+
+
+
+def downloadMusicList(data):
+    if len(data)<1:
+        return "None"
+    for song in data:
+        filename=song['author']+"-"+song['title']+".mp3"
+        url=song['url']
+        status=downloadMusicByPowerShell(filename,url)
+        print( filename+"          " + str(status))
+    return "Done"
+
+def downloadAllSongByKeyWord(keyword):
+    downloadMusicList(searchMusicListByKeyWord(keyword))
+
+def downloadMusicByPowerShell(filename,url):
+    _filename=filename.replace(u'\xa0', u' ').replace(",","+").replace("'","").replace("’","").replace("!","+").replace("@","+").replace("#","+").replace("$","+").replace("%","+").replace("^","+").replace("&","+").replace("*","+").replace(":","").replace("：","").replace(" "," ").replace('\n','').replace(' ','').replace(':','-').replace('：','-').replace('>','）').replace('<','（').replace('(','`(').replace(')','`)')
+    try:
+        c = "powershell -Command \"Invoke-WebRequest %s -OutFile %s\"" % (url,download_path+_filename.encode('UTF-8').decode("UTF-8"))
         if(url==None):
             return
         print(c)
-        os.system(c)
-        return
+        return os.system(c)
     except Exception as e:
         print(e)
-        return
+        return e
 
+def downloadMusicById(mid):
+    data=searchMusicById(str(mid))
+    if len(data)<1:
+        return "None"
+    filename=data[0]['author']+"-"+data[0]['title']+".mp3"
+    url=data[0]['url']
+    status=downloadMusicByPowerShell(filename,url)
+    print( filename+"          " + str(status))
+    return "Done"
 
-def downloadMusicFrom163ById(mid,path):
-    return downloadMusicByIdAndProvider(mid,path,"netease")
-
-def downloadMusicByIdAndProvider(mid,path,provider):
-    data=searchMusicByIdAndProvider(str(mid),provider)
-    data=json.loads(data)
-    filename=data['data'][0]['author']+"-"+data['data'][0]['title']+".mp3"
-    url=data['data'][0]['url']
-    downloadMusic(filename,url,path)
-    return data
-
-def getPlayList(url):
+def getPlay163ShareSongList(url):
     print("open:"+url)
     mList=[]
-    responseRes = webSession.get(url,  headers = defaultHeader)
-    # print(f"statusCode = {responseRes.status_code}")
-    # print(f"text = {responseRes.text}")
-    webSession.cookies.save()
-    data=responseRes.text
-    datas=data.split("<li><a href=\"/song?id=")
-    # print(len(datas))
-    for i in range(1,len(datas)):
-        value=datas[i].split("\"")[0]
-        mList.append(value)
-        print(value)
-        pass
-    return mList
+    try:
+        responseRes = webSession.get(url,  headers = defaultHeader)
+         
+        webSession.cookies.save()
+        data=responseRes.text
+        datas=data.split("<li><a href=\"/song?id=")
+        print("一共查询到"+str(len(datas))+"个歌曲")
+        for i in range(1,len(datas)):
+            value=datas[i].split("\"")[0]
+            mList.append(value)
+    except Exception as e:
+        print(e)
+    finally:
+        return mList
 
-def downloadPlayList(url,path):
-    _path=download_path
-    if(path==None):
-        print("path None")
-    else:
-        _path=path
-    plist=getPlayList(url)
-    for song in plist:
-        downloadMusicFrom163ById(song,_path)
+def download163SharePlayList(url):
+    plist=getPlay163ShareSongList(url)
+    for songId in plist:
+        downloadMusicById(songId)
+
+def fucMain():
+    global ptname,provider
+    print("选择你要的功能，输入数字回车即可，例如：1")
+    print()
+    print("1.通过关键字检索歌曲")
+    print("2.修改下载平台，支持的平台有默认网易、QQ、酷狗、酷我、虾米、百度、一听、咪咕、荔枝、蜻蜓、喜马拉雅、全民K歌、5sing原创、5sing翻唱等")
+    print("3.通过用户分享的播放列表下载歌曲（例如【https://music.163.com/#/playlist?id=140988826&userid=114431055】）")
+    print("4.通过音乐ID下载歌曲  （例如http://music.163.com/#/song?id=185721中的【185721】）")
+    print("5.全平台关键字下载")
+    print()
+    print()
+    fid=input()
+    if fid=="1":
+        print("当前下载平台是【"+str(ptname)+"】")
+        print("输入你需要检索的歌曲关键字然后回车：")
+        print()
+        key=input()
+        print("正在查询关键字【"+str(key)+"】相关的歌曲，请稍候")
+        data=searchMusicListByKeyWord(key)
+        for song in data:
+            print(str(song['songid'])+" : "+str(song['title'])+"         "+str(song['author']))
         pass
+        print("是否全部下载，如果要全部下载请输入yes回车，如果不是全部下载，请输入要下载的歌曲id回车，返回请直接按回车")
+        print()
+        cid=input()
+        if cid=="yes":
+            downloadMusicList(data)
+        elif len(cid)>2:
+            print("当前下载平台是【"+str(ptname)+"】")
+            print("正在下载ID为【"+str(cid)+"】的歌曲，请稍候")
+            downloadMusicById(cid)
+        else:
+            pass
+
+    if fid=="2":
+        print("当前下载平台是【"+str(ptname)+"】")
+        print("输入你需要切换的平台对应的ID然后回车：")
+        print("【默认：1网易】、2QQ、3酷狗、4酷我、5虾米、6百度、7一听、8咪咕、9荔枝、10蜻蜓、11喜马拉雅、12全民K歌、13-5sing原创、14-5sing翻唱等")
+        print()
+        key=input()
+        if key=="1":
+            ptname="网易云音乐"
+            provider="netease"
+            print("已经切换到"+str(ptname)+"下载")
+        if key=="2":
+            ptname="QQ音乐"
+            provider="qq"
+            print("已经切换到"+str(ptname)+"下载")
+        if key=="3":
+            ptname="酷狗音乐"
+            provider="kugou"
+            print("已经切换到"+str(ptname)+"下载")
+        if key=="4":
+            ptname="酷我音乐"
+            provider="kuwo"
+            print("已经切换到"+str(ptname)+"下载")
+        if key=="5":
+            ptname="虾米音乐"
+            provider="xiami"
+            print("已经切换到"+str(ptname)+"下载")
+        if key=="6":
+            ptname="百度云音乐"
+            provider="baidu"
+            print("已经切换到"+str(ptname)+"下载")
+        if key=="7":
+            ptname="一听云音乐"
+            provider="1ting"
+            print("已经切换到"+str(ptname)+"下载")
+        if key=="8":
+            ptname="咪咕音乐"
+            provider="migu"
+            print("已经切换到"+str(ptname)+"下载")
+        if key=="9":
+            ptname="荔枝音乐"
+            provider="lizhi"
+            print("已经切换到"+str(ptname)+"下载")
+        if key=="10":
+            ptname="蜻蜓音乐"
+            provider="qingting"
+            print("已经切换到"+str(ptname)+"下载")
+        if key=="11":
+            ptname="喜马拉雅"
+            provider="ximalaya"
+            print("已经切换到"+str(ptname)+"下载")
+        if key=="12":
+            ptname="全民K歌"
+            provider="kg"
+            print("已经切换到"+str(ptname)+"下载")
+        if key=="13":
+            ptname="5sing原创"
+            provider="5singyc"
+            print("已经切换到"+str(ptname)+"下载")
+        if key=="14":
+            ptname="5sing翻唱"
+            provider="5singfc"
+            print("已经切换到"+str(ptname)+"下载")
+    if fid=="3":
+        print("当前下载平台是【"+str(ptname)+"】")
+        print("输入你需要下载的歌曲列表链接然后回车：")
+        print("比如：https://music.163.com/playlist?id=140988826&userid=114431055")
+        print()
+        key=input()
+        print("正在下载【"+str(key)+"】列表的歌曲，请稍候")
+        download163SharePlayList(key)
+    if fid=="4":
+        print("当前下载平台是【"+str(ptname)+"】")
+        print("输入你需要下载的歌曲ID然后回车：")
+        print("比如：316686 ")
+        print()
+        key=input()
+        print("正在下载ID为【"+str(key)+"】的歌曲，请稍候")
+        downloadMusicById(key)
+    if fid=="5":
+        print("输入你需要检索的歌曲关键字然后回车：")
+        print()
+        key=input()
+        print("输入你需要检索的歌曲的歌手名字然后回车（不限的话留空）：")
+        print()
+        singer=input()
+        print()
+        print("正在查询关键字【"+str(key)+"】相关的歌曲，请稍候")
+        data=[]
+        ptname="网易云音乐"
+        provider="netease"
+        print("已经切换到"+str(ptname)+"下载")
+        data.extend(searchMusicListByKeyWord(key))
+        ptname="QQ音乐"
+        provider="qq"
+        print("已经切换到"+str(ptname)+"下载")
+        data.extend(searchMusicListByKeyWord(key))
+        ptname="酷狗音乐"
+        provider="kugou"
+        print("已经切换到"+str(ptname)+"下载")
+        data.extend(searchMusicListByKeyWord(key))
+        ptname="酷我音乐"
+        provider="kuwo"
+        print("已经切换到"+str(ptname)+"下载")
+        data.extend(searchMusicListByKeyWord(key))
+        ptname="虾米音乐"
+        provider="xiami"
+        print("已经切换到"+str(ptname)+"下载")
+        data.extend(searchMusicListByKeyWord(key))
+        ptname="百度云音乐"
+        provider="baidu"
+        print("已经切换到"+str(ptname)+"下载")
+        data.extend(searchMusicListByKeyWord(key))
+        ptname="一听云音乐"
+        provider="1ting"
+        print("已经切换到"+str(ptname)+"下载")
+        data.extend(searchMusicListByKeyWord(key))
+        ptname="咪咕音乐"
+        provider="migu"
+        print("已经切换到"+str(ptname)+"下载")
+        data.extend(searchMusicListByKeyWord(key))
+        ptname="荔枝音乐"
+        provider="lizhi"
+        print("已经切换到"+str(ptname)+"下载")
+        data.extend(searchMusicListByKeyWord(key))
+        ptname="蜻蜓音乐"
+        provider="qingting"
+        print("已经切换到"+str(ptname)+"下载")
+        data.extend(searchMusicListByKeyWord(key))
+        ptname="喜马拉雅"
+        provider="ximalaya"
+        print("已经切换到"+str(ptname)+"下载")
+        data.extend(searchMusicListByKeyWord(key))
+        ptname="全民K歌"
+        provider="kg"
+        print("已经切换到"+str(ptname)+"下载")
+        data.extend(searchMusicListByKeyWord(key))
+        ptname="5sing原创"
+        provider="5singyc"
+        print("已经切换到"+str(ptname)+"下载")
+        data.extend(searchMusicListByKeyWord(key))
+        ptname="5sing翻唱"
+        provider="5singfc"
+        print("已经切换到"+str(ptname)+"下载")
+        data.extend(searchMusicListByKeyWord(key))
+        datatodownload=[]
+        for song in data:
+            author=str(song['author']).replace(" ","").replace("\n","")
+            if (len(singer)>1 and (singer not in author)):
+                continue
+            print(str(song['songid'])+" : "+str(song['title'])+"         "+str(song['author']))
+            datatodownload.append(song)
+        downloadMusicList(datatodownload)
+        
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 if __name__ == "__main__":
     # webSession.cookies.load()
     # print(webSession.cookies)
-    # mid=input()
-    # mid=mid.upper()
-    downloadPlayList("https://music.163.com/playlist?id=140988826&userid=114431055",download_path)
-    # https://music.163.com/playlist?id=140988826&userid=114431055
-    # downloadMusicFrom163ById(mid)
+    while True:
+        fucMain()
+
     
-data_file.close()
-if data_file:
-    data_file.close()
+# data_file.close()
+# if data_file:
+#     data_file.close()
