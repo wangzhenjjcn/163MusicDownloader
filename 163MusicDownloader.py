@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+# Author WangZhen <wangzhenjjcn@gmail.com> MIT Licenses
 import sys
 import time
 import datetime
@@ -149,6 +150,8 @@ def searchMusicListByKeyWord(word):
 
 def downloadMusicByHttpRequest(filename,url):
     global ptname, provider, download_path
+    if not os.path.exists(download_path):
+        os.mkdir(download_path)
     if(url == None or "http" not in url):
         print("urlerr:"+str(url))
         return 3
@@ -157,7 +160,11 @@ def downloadMusicByHttpRequest(filename,url):
     'Upgrade-Insecure-Requests':'1'}
     _filename = download_path+re.sub(r'[\/:*?"<>|]','-',filename)
     if  os.path.exists(_filename):
-        return 0    
+        print("已存在：文件大小："+str(os.path.getsize(_filename)))
+        if os.path.getsize(_filename)>1024000:
+            return 0    
+        else:
+            print("小于1MB的重新下载中")
     # print("download:"+url+"  as  "+_filename)
     response = requests.get(url, headers=headers)
     try:
@@ -205,10 +212,10 @@ def downloadMusicList(data):
         # status = downloadMusicByPowerShell(filename, url)
         status = downloadMusicByHttpRequest(filename, url)
         espace=""
-        for n in range(1, 30-len(filename)):
+        for n in range(1, 70-len(filename)):
                 espace += " "
         if str(status)=="3":
-            print("下载:"+espace+filename+espace+ str(status).replace("0","下载已完成").replace("1","下载错误").replace("3","地址错误"))
+            print("下载:   "+filename+espace+ str(status).replace("0","下载已完成").replace("1","下载错误").replace("3","地址错误"))
             print(url)
             print()
             if song['type']=="netease":
