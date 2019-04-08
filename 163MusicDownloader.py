@@ -15,7 +15,7 @@ except:
     import http.cookiejar as cookielib
     print(f"python3.")
 
-
+downloadall="init"
 songList = {}
 webSession = requests.session()
 webSession.cookies = cookielib.LWPCookieJar(filename="cookie.txt")
@@ -105,7 +105,7 @@ def searchMusicByTitle(title, page):
 
 
 def searchMusicListByKeyWord(word):
-    global ptname, provider, download_path
+    global ptname, provider, download_path,downloadall
     print("当前平台："+str(ptname)+"-"+str(provider)+"关键字："+str(word))
     datas = []
     page = 1
@@ -118,7 +118,7 @@ def searchMusicListByKeyWord(word):
                 espace += " "
             print(song['author']+espace+song['title'])
         datas.extend(data)
-        print("pages:"+str(page)+"  datas:"+str(len(datas)))
+        print("added:"+str(len(data))+"  NowPages:"+str(page)+"  AllDatas:"+str(len(datas)))        
         if downloadall=="all" and downloadall!="init":
             page += 1
             data = searchMusicByTitle(word, page)
@@ -135,8 +135,14 @@ def searchMusicListByKeyWord(word):
             else:
                 page += 1
                 data = searchMusicByTitle(word, page)
+        for song in data:
+            if word not in song['author'] and word not in song['title']:
+                data.remove(song)
     print("当前平台："+str(ptname)+"-"+str(provider) +
           "关键字："+str(word)+"一共检测到："+str(len(datas))+"条")
+    for song in datas:
+        if word not in song['author'] and word not in song['title']:
+            datas.remove(song)
     return datas
 
 
@@ -144,13 +150,15 @@ def searchMusicListByKeyWord(word):
 def downloadMusicByHttpRequest(filename,url):
     global ptname, provider, download_path
     if(url == None or "http" not in url):
-        print("urlerr:"+url)
+        print("urlerr:"+str(url))
         return 3
     headers = {'User-Agent':"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/71.0.3578.98 Safari/537.36",
     'Accept':'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8',
     'Upgrade-Insecure-Requests':'1'}
-    _filename = download_path+re.sub('[\/:*?"<>|]','-',filename)
-    print("download:"+url+"  as  "+_filename)
+    _filename = download_path+re.sub(r'[\/:*?"<>|]','-',filename)
+    if  os.path.exists(_filename):
+        return 0    
+    # print("download:"+url+"  as  "+_filename)
     response = requests.get(url, headers=headers)
     try:
         with open(_filename.encode('UTF-8').decode("UTF-8"), 'wb') as f:
@@ -167,11 +175,17 @@ def downloadMusicByHttpRequest(filename,url):
 
 def downloadMusicByPowerShell(filename, url):
     global ptname, provider, download_path
-    _filename = filename.replace(u'\xa0', u' ').replace(",", "+").replace("'", "").replace("’", "").replace("!", "+").replace("@", "+").replace("#", "+").replace("$", "+").replace("%", "+").replace("^", "+").replace(
-        "&", "+").replace("*", "+").replace(":", "").replace("：", "").replace(" ", " ").replace('\n', '').replace(' ', '').replace(':', '-').replace('：', '-').replace('>', '）').replace('<', '（').replace('(', '`(').replace(')', '`)')
+    if(url == None or "http" not in url):
+        print("urlerr:"+url)
+        return 3
+    _filename = download_path+re.sub(r'[\/:*?"<>|]','-',filename)
+    # _filename = filename.replace(u'\xa0', u' ').replace(",", "+").replace("'", "").replace("’", "").replace("!", "+").replace("@", "+").replace("#", "+").replace("$", "+").replace("%", "+").replace("^", "+").replace(
+    #     "&", "+").replace("*", "+").replace(":", "").replace("：", "").replace(" ", " ").replace('\n', '').replace(' ', '').replace(':', '-').replace('：', '-').replace('>', '）').replace('<', '（').replace('(', '`(').replace(')', '`)')
+    if  os.path.exists(_filename):
+        return 0    
     try:
         c = "powershell -Command \"Invoke-WebRequest %s -OutFile %s\"" % (
-            url, download_path+_filename.encode('UTF-8').decode("UTF-8"))
+            url, _filename.encode('UTF-8').decode("UTF-8"))
         if(url == None):
             return
         print(c)
@@ -180,8 +194,9 @@ def downloadMusicByPowerShell(filename, url):
         print(e)
         return e
 
-
+ 
 def downloadMusicList(data):
+    global ptname, provider, download_path
     if len(data) < 1:
         return "None"
     for song in data:
@@ -189,9 +204,19 @@ def downloadMusicList(data):
         url = song['url']
         # status = downloadMusicByPowerShell(filename, url)
         status = downloadMusicByHttpRequest(filename, url)
+        espace=""
+        for n in range(1, 30-len(filename)):
+                espace += " "
         if str(status)=="3":
-            print(song)
-        print(filename+"          " + str(status))
+            print("下载:"+espace+filename+espace+ str(status).replace("0","下载已完成").replace("1","下载错误").replace("3","地址错误"))
+            print(url)
+            print()
+            if song['type']=="netease":
+                print("尝试下载128Kbps版本")
+                print()
+                url = 'http://music.163.com/song/media/outer/url?id=' +str(song['songid'])+ '.mp3'
+                status =downloadMusicByHttpRequest(filename,url)
+        print("下载:"+espace+filename+espace+ str(status).replace("0","下载已完成").replace("1","下载错误").replace("3","地址错误"))
     return "Done"
 
 
@@ -201,13 +226,7 @@ def downloadAllSongByKeyWord(keyword):
 
 def downloadMusicById(mid):
     data = searchMusicById(str(mid))
-    if len(data) < 1:
-        return "None"
-    filename = data[0]['author']+"-"+data[0]['title']+".mp3"
-    url = data[0]['url']
-    # status = downloadMusicByPowerShell(filename, url)
-    status = downloadMusicByHttpRequest(filename, url)
-    print(filename+"          " + str(status))
+    downloadMusicList(data)
     return "Done"
 
 
