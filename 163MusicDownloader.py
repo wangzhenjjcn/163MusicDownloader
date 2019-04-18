@@ -63,16 +63,16 @@ def searchMusicById(mid):
         return []
     #print(f"text = {responseRes.text.encode('utf-8').decode('unicode_escape')}")
     try:
-        r_file = open("./tmp/"+str(data['data'][0]['songid']) +
-                      "-"+str(data['data'][0]['type']), "w", encoding="utf-8")
-        r_file.write(str(data))
-        r_file.flush()
+        #r_file = open("./tmp/"+str(data['data'][0]['songid']) +
+        #              "-"+str(data['data'][0]['type']), "w", encoding="utf-8")
+        #r_file.write(str(data))
+        #r_file.flush()
         return data['data']
     except:
         responseRes.text
         return data['data']
     finally:
-        r_file.close()
+        #r_file.close()
         return data['data']
 
 
